@@ -1,0 +1,8 @@
+Python browser plugin host
+==========================
+
+An implementation of an NSPlugin host in Python, using ctypes and a bit of GTK+2.
+
+Implements just enough of the API to run the Flash plugin, other plugins are much more picky...
+
+License: Public domain
