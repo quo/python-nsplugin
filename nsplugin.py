@@ -16,6 +16,7 @@ _NPBool = c.c_ubyte
 _NPReason = c.c_int16
 _NPNVariable = c.c_int
 
+_NP_EMBED = 1
 _NP_FULL = 2
 _NP_NORMAL = 1
 _NP_ASFILE = 3
@@ -196,23 +197,29 @@ class NSPlugin(object):
 		self.plugin_funcs = None
 	def __repr__(self):
 		return '<NSPlugin: %s>' % self.filename
-	def new(self, filename, mimetype, xid, width, height):
+	def new(self, *args):
 		if not self.plugin_funcs:
 			self.plugin_funcs = _NPPluginFuncs()
 			_check('NP_Initialize', self.lib.NP_Initialize(c.byref(_netscape_funcs), c.byref(self.plugin_funcs)))
-		return NSPluginInstance(self, filename, mimetype, xid, width, height)
+		return NSPluginInstance(self, *args)
 	def shutdown(self):
 		if self.plugin_funcs:
 			self.lib.NP_Shutdown()
 			self.plugin_funcs = None
 
 class NSPluginInstance(object):
-	def __init__(self, plugin, filename, mimetype, xid, width, height):
+	def __init__(self, plugin, filename, mimetype, xid, width, height, args=()):
 		self.plugin = plugin
 		self.filename = filename
 		self.instance = _NPP_t()
 		self.instance.ndata = self
-		_check('newp', plugin.plugin_funcs.newp(mimetype, c.byref(self.instance), _NP_FULL, 0, None, None, None))
+		argn = (c.c_char_p*len(args))()
+		argv = (c.c_char_p*len(args))()
+		for i, (n, v) in enumerate(args):
+			argn[i] = n
+			argv[i] = v
+		_check('newp', plugin.plugin_funcs.newp(mimetype, c.byref(self.instance),
+			_NP_EMBED if args else _NP_FULL, len(args), argn, argv, None))
 		self.np_window = _NPWindow()
 		self.np_window.type = _NPWindowTypeWindow
 		self.np_window.window = xid
@@ -224,9 +231,11 @@ class NSPluginInstance(object):
 		return '<NSPluginInstance: %s, %s>' % (self.plugin.filename, self.filename)
 	def _do_stream(self, src, mimetype, notify_data):
 		if src.startswith('file://'): src = src[7:]
-		if not src.startswith('/'):
+		if ':' in src:
 			log.error('Invalid url: %r', src)
 			return NPError.INVALID_URL
+		if not src.startswith('/'):
+			src = os.path.join(os.path.dirname(os.path.abspath(self.filename)), src)
 		reason = _NPRES_DONE
 		np_stream = _NPStream()
 		np_stream.url = 'file://' + src

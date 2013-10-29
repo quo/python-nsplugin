@@ -17,16 +17,17 @@ class NSPluginViewer(gtk.Socket):
 		self.connect('size-allocate', lambda w, a: self.instance and self.instance.set_size(a.width, a.height))
 	def _create_instance(self, *a):
 		if not self.instance and self.filename and self.get_id():
-			self.instance = self.plugin.new(self.filename, self.mimetype, self.get_id(), self.allocation.width, self.allocation.height)
+			self.instance = self.plugin.new(self.filename, self.mimetype, self.get_id(), self.allocation.width, self.allocation.height, self.args)
 	def _destroy_instance(self, *a):
 		if self.instance:
 			self.instance.close()
 			self.instance = None
-	def set_file(self, plugin, filename, mimetype):
+	def set_file(self, plugin, filename, mimetype, args):
 		self._destroy_instance()
 		self.plugin = plugin
 		self.filename = filename
 		self.mimetype = mimetype
+		self.args = args
 		self._create_instance()
 
 def get_plugin(plugins, ext, mimetype):
@@ -40,9 +41,12 @@ def main():
 
 	parser = argparse.ArgumentParser(description='View a file using a browser plugin.')
 	parser.add_argument('file', metavar='FILE', help='the file to open')
+	parser.add_argument('args', metavar='ARG=VALUE', nargs='*', help='plugin arguments')
 	parser.add_argument('-t', '--mimetype', help='mimetype of the file')
 	parser.add_argument('-p', '--plugin', help='plugin library to use')
 	args = parser.parse_args()
+
+	pluginargs = [a.split('=', 1) for a in args.args]
 
 	ext = None if args.mimetype else args.file.rsplit('.', 1)[-1]
 	if args.plugin:
@@ -68,6 +72,7 @@ def main():
 		print
 
 	print 'Using plugin %r and mimetype %r for %r' % (plugin.filename, mimetype, args.file)
+	print 'Plugin arguments: %r' % pluginargs
 
 	w = gtk.Window()
 	w.set_default_size(640, 480)
@@ -75,7 +80,7 @@ def main():
 	v = NSPluginViewer()
 	w.add(v)
 	w.show_all()
-	v.set_file(plugin, args.file, mimetype)
+	v.set_file(plugin, args.file, mimetype, pluginargs)
 	gtk.main()
 
 	for p in plugins: p.shutdown()
